@@ -20,3 +20,4 @@ static library in the `lib` directory.
 
 ## Known issues
 1. Never put the member function of  `SerialAdapter` in `SerialListener`.
+2. `x64` setting is not supported
