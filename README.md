@@ -20,7 +20,6 @@ static library in the `lib` directory.
 
 ## Known issues
 1. Never put the member function of  `SerialAdapter` in `SerialListener`.
-2. `x64` setting is not supported
-3. [serialControl][serialControl] is in early version,the public API is unstable.
+2. [serialControl][serialControl] is in early version,the public API is unstable.
 
 [serialControl]: https://www.github.com/zhoukaisspu/serialControl
