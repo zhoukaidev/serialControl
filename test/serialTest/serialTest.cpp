@@ -11,12 +11,8 @@ std::condition_variable globalCV;
 class DataCollector : public oym::SerialListener
 {
 public:
-	void onConnected()
-	{
-		std::cout << "[INFO]: Serial connected\n";
-	}
 
-	void onDisconnected()
+	void onClosed()
 	{
 		std::cout << "[INFO]: Serial disconnected\n";
 		globalCV.notify_all();
@@ -24,38 +20,28 @@ public:
 
 	void onData(unsigned char data)
 	{
-		std::cout << (int)data << "\n";
+		std::cout << static_cast<unsigned int>(data) << " ";
 	}
 };
 
-int main()
+int main(int argc, char** argv)
 {
-	std::string serialnum = "com3";
-	oym::SerialAdapter adapter(serialnum);
+	oym::serialAdapter adapter;
 	std::shared_ptr<DataCollector> ptr = std::make_shared<DataCollector>();
-	adapter.addListener(ptr);
-	while (true) {
-		while (true) {
-			std::string test;
-			std::cout << "[INFO]: Input \"yes\" to open the serial or \"no\" to wait " << serialnum << " \n";
-			std::cin >> test;
-			if (test == "no")
-				continue;
-			try {
-				adapter.run();
-				break;
-			}
-			catch (const std::exception& e) {
-				std::cout << e.what() << std::endl;
-			}
-		}
-
-		{
-			std::mutex mtx;
-			std::unique_lock<std::mutex> lck(mtx);
-			globalCV.wait(lck);
-		}
+	adapter.registerListener(ptr);
+	unsigned int comport = 0;
+	std::cout << "Please input serial number: ";
+	std::cin >> comport;
+	std::cout << "comport:	"<<	comport << std::endl;
+	auto ret = adapter.open(comport);
+	if (ret != oym::SUCCESS) {
+		std::cout << "Open Serial Port failure\n";
+		return 0;
 	}
-	system("pause");
+		
+	std::mutex mtx;
+	std::unique_lock<std::mutex> ulk(mtx);
+	globalCV.wait(ulk);
+	adapter.close();
 	return 0;
 }
