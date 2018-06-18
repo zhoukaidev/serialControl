@@ -42,6 +42,5 @@ int main(int argc, char** argv)
 	std::mutex mtx;
 	std::unique_lock<std::mutex> ulk(mtx);
 	globalCV.wait(ulk);
-	adapter.close();
 	return 0;
 }

@@ -13,6 +13,11 @@ using std::set;
 namespace oym
 {
 
+	serialAdapter::~serialAdapter()
+	{
+		quitDetectThread();
+		quitDetectThread();
+	}
 	RET_CODE serialAdapter::registerListener(weak_ptr<SerialListener> ptr)
 	{
 		auto sp = ptr.lock();
@@ -56,32 +61,27 @@ namespace oym
 	}
 	RET_CODE serialAdapter::open(unsigned int port,
 		unsigned long nBaud,
-		unsigned char nParity,
-		unsigned char nByteSize,
-		unsigned char nStopBit)
+		serialAdapter::Parity nParity,
+		serialAdapter::DataBits nByteSize,
+		serialAdapter::StopBits nStopBit)
 	{
 		if (true == mSerialOpend.load())
 			return SUCCESS;
 		mComPort = port;
-		mDcb.BaudRate = nBaud;
-		mDcb.Parity = nParity;
-		mDcb.ByteSize = nByteSize;
-		mDcb.StopBits = ONESTOPBIT;
-		std::cout << "port: " << (unsigned int)port << std::endl;
-		std::cout << "nBaud: " << mDcb.BaudRate << std::endl;
-		std::cout << "Parity: " <<(int)mDcb.Parity << std::endl;
-		std::cout << "ByteSize: " << (int)mDcb.ByteSize << std::endl;
-		std::cout << "StopBits: " <<(int)mDcb.StopBits << std::endl;
+		mParity = nParity;
+		mByteSize = nByteSize;
+		mStopBit = nStopBit;
+		mBaudRate = nBaud;
 		if (std::this_thread::get_id() == mReadThread.get_id() ||
 			std::this_thread::get_id() == mDetectThread.get_id()) {
 			return FAILURE; 
 		}
-		if (SUCCESS == openSerialPort()) {
+		auto ret = openSerialPort();
+		if (SUCCESS == ret) {
 			quitReadThread();
 			quitDetectThread();
 			mReadThread = std::thread(std::mem_fn(&serialAdapter::readSerialData),this);
 			mDetectThread = std::thread(std::mem_fn(&serialAdapter::detectSerialAvaliable), this);
-			mSerialOpend = true;
 			return SUCCESS;
 		}
 		return FAILURE;
@@ -108,7 +108,6 @@ namespace oym
 #ifdef _WIN32
 		CString sCom;
 		sCom.Format(_T("\\\\.\\COM%d"), mComPort);
-		std::wcout << sCom << std::endl;
 		mComFile= CreateFile(sCom.GetBuffer(50),
 			GENERIC_READ | GENERIC_WRITE,
 			0,/* do not share*/
@@ -119,7 +118,11 @@ namespace oym
 		if (mComFile == INVALID_HANDLE_VALUE) {
 			return FAILURE;
 		}
-		if (SUCCESS != SetupSerialPort(mComFile,50)) {
+		if (SUCCESS != SetupSerialPort(mComFile,
+										mBaudRate,
+										mParity,
+										mByteSize,
+										mStopBit)) {
 			CloseHandle(mComFile);
 			return FAILURE;
 		}
@@ -139,12 +142,17 @@ namespace oym
 			return FAILURE;
 #endif
 	}
-
-	RET_CODE serialAdapter::SetupSerialPort(HANDLE &file,unsigned short readTimeout)
+	RET_CODE serialAdapter::SetupSerialPort(HANDLE file,
+		unsigned long baud,
+		serialAdapter::Parity nParity,
+		serialAdapter::DataBits nDatabits,
+		serialAdapter::StopBits nStopbits,
+		unsigned short readTimeout)
 	{
-#ifdef _WIN32
 		DCB ndcb;
 		COMMTIMEOUTS timeouts;
+		SecureZeroMemory(&ndcb, sizeof(DCB));
+		ndcb.DCBlength = sizeof(DCB);
 		timeouts.ReadIntervalTimeout = 0;
 		timeouts.ReadTotalTimeoutMultiplier = 0;
 		timeouts.ReadTotalTimeoutConstant = readTimeout;
@@ -152,44 +160,81 @@ namespace oym
 		timeouts.WriteTotalTimeoutMultiplier = 0;
 		SetCommTimeouts(file, &timeouts);
 		if (!GetCommState(file, &ndcb)) {
-			throw std::runtime_error("GetCommState failed\n");
+			throw std::runtime_error("get commstate error");
 		}
-
-		ndcb.DCBlength = sizeof(DCB);
-		ndcb.BaudRate = mDcb.BaudRate;
-		ndcb.Parity = mDcb.Parity;
-		ndcb.ByteSize = mDcb.ByteSize;
-		ndcb.StopBits = mDcb.StopBits;
+		ndcb.BaudRate = baud;
+		switch (nParity) {
+		case serialAdapter::NO_PARITY:
+			ndcb.Parity = NOPARITY;
+			break;
+		case serialAdapter::EVEN_PARITY:
+			ndcb.Parity = EVENPARITY;
+			break;
+		case serialAdapter::MARK_PARITY:
+			ndcb.Parity = MARKPARITY;
+			break;
+		case serialAdapter::ODD_PARITY:
+			ndcb.Parity = ODDPARITY;
+			break;
+		case serialAdapter::SPACE_PARITY:
+			ndcb.Parity = SPACEPARITY;
+			break;
+		default:
+			ndcb.Parity = NOPARITY;
+			break;
+		}
+		switch (nDatabits) {
+		case serialAdapter::DATA_BITS_5:
+			ndcb.ByteSize = DATABITS_5;
+			break;
+		case serialAdapter::DATA_BITS_6:
+			ndcb.ByteSize = DATABITS_6;
+			break;
+		case serialAdapter::DATA_BITS_7:
+			ndcb.ByteSize = DATABITS_7;
+			break;
+		case serialAdapter::DATA_BITS_8:
+			ndcb.ByteSize = DATABITS_8;
+			break;
+		default:
+			ndcb.ByteSize = DATABITS_8;
+			break;
+		}
+		switch (nStopbits) {
+		case serialAdapter::STOP_BITS_1:
+			ndcb.StopBits = ONESTOPBIT;
+			break;
+		case serialAdapter::STOP_BITS_1_5:
+			ndcb.StopBits = ONE5STOPBITS;
+			break;
+		case serialAdapter::STOP_BITS_2:
+			ndcb.StopBits = TWOSTOPBITS;
+			break;
+		default:
+			ndcb.StopBits = ONESTOPBIT;
+			break;
+		}
 		ndcb.fRtsControl = RTS_CONTROL_DISABLE;
 		ndcb.fDtrControl = DTR_CONTROL_ENABLE;
 		ndcb.fOutxCtsFlow = FALSE;
 		ndcb.fOutxDsrFlow = FALSE;
 		ndcb.fOutX = FALSE;
 		ndcb.fInX = FALSE;
-
-		if (!SetCommState(file, &ndcb)) {
+		if (!SetCommState(file, &ndcb)) 
 			throw std::runtime_error("SetCommState failed\n");
-		}
-		
 		PurgeComm(file, PURGE_RXCLEAR | PURGE_TXCLEAR);
 
 		/*clear error*/
 		DWORD dwError;
 		COMSTAT cs;
-		if (!ClearCommError(file, &dwError, &cs)) {
+		if (!ClearCommError(file, &dwError, &cs))
 			throw std::runtime_error("ClearCommError failed\n");
-		}
 
 		/*set mask*/
 		SetCommMask(file, EV_RXCHAR);
 
 		return SUCCESS;
-#else
-		return FAILURE;
-#endif
 	}
-
-
 
 	void serialAdapter::readSerialData(void)
 	{
@@ -261,6 +306,7 @@ namespace oym
 			std::this_thread::sleep_for(std::chrono::microseconds(100));
 			if (SUCCESS == checkPortAvaliable()) {
 				{
+					quitReadThread();
 					std::lock_guard<std::mutex> ltx(mListenerMtx);
 					for (auto listener : mListener) {
 						auto f = listener.lock();
@@ -269,7 +315,6 @@ namespace oym
 						}
 					}
 				}
-				quitReadThread();
 				return;
 			}
 #endif

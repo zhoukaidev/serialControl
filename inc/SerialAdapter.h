@@ -74,8 +74,30 @@ namespace oym
 	class serial :public noncopyable
 	{
 		public:
-			virtual RET_CODE open(unsigned int port, unsigned long nBaud, unsigned char nParity,
-				unsigned char nByteSize, unsigned char nStopBit) = 0;
+			enum StopBits{
+				STOP_BITS_1,
+				STOP_BITS_1_5,
+				STOP_BITS_2
+			};
+			enum Parity {
+				EVEN_PARITY,
+				MARK_PARITY,
+				NO_PARITY,
+				ODD_PARITY,
+				SPACE_PARITY
+			};
+			enum DataBits {
+				DATA_BITS_5,
+				DATA_BITS_6,
+				DATA_BITS_7,
+				DATA_BITS_8
+			};
+		public:
+			virtual RET_CODE open(unsigned int port,
+				unsigned long nBaud,
+				Parity nParity,
+				DataBits nByteSize,
+				StopBits stop) = 0;
 			virtual RET_CODE close() = 0;
 			virtual RET_CODE write_sync(unsigned char data) = 0;
 			virtual std::future<bool> write_async(unsigned char data) = 0;
@@ -94,12 +116,12 @@ namespace oym
 	{
 		public:
 			serialAdapter():serial(),mSerialOpend(false){}
-			~serialAdapter() {};
+			~serialAdapter();
 			virtual RET_CODE open(unsigned int port, 
 				unsigned long nBaud = SERIAL_LOW_BAUDRATE, 
-				unsigned char nParity = 0,
-				unsigned char nByteSize = 8, 
-				unsigned char nStopBit = 1) override;
+				Parity nParity = Parity::NO_PARITY,
+				DataBits nByteSize = DataBits::DATA_BITS_8, 
+				StopBits nStopBit = StopBits::STOP_BITS_1) override;
 
 			virtual RET_CODE close()override;
 			virtual RET_CODE write_sync(unsigned char data) override;
@@ -113,7 +135,16 @@ namespace oym
 		private:
 			RET_CODE openSerialPort(void);
 			RET_CODE closeSerialPort(void);
-			RET_CODE SetupSerialPort(HANDLE &file,unsigned short readTimeout = 50);
+#ifdef _WIN32
+			RET_CODE SetupSerialPort(HANDLE file,
+					unsigned long baud = SERIAL_LOW_BAUDRATE,
+					Parity nParity = Parity::NO_PARITY,
+					DataBits nDatabits = DataBits::DATA_BITS_8,
+					StopBits nStopbits = StopBits::STOP_BITS_1,
+					unsigned short readTimeout = 50);
+#else
+			RET_CODE SetupSerialPort(unsigned char readTimeout);
+#endif
 			void readSerialData(void);
 			void detectSerialAvaliable(void);
 			RET_CODE checkPortAvaliable(void);
@@ -130,14 +161,13 @@ namespace oym
 
 			std::atomic<bool> mSerialOpend;
 
-			unsigned char mParity;
-			unsigned char mByteSize;
-			unsigned char mStopBit;
+			Parity mParity;
+			DataBits mByteSize;
+			StopBits mStopBit;
 			unsigned int mComPort;
 			unsigned long mBaudRate;
 #ifdef _WIN32
 			HANDLE mComFile = nullptr;
-			DCB mDcb;
 #endif
 	};
 }
