@@ -142,6 +142,68 @@ namespace oym
 			return FAILURE;
 #endif
 	}
+
+#ifdef _WIN32
+	void serialAdapter::syncParity(DCB& dcb, serialAdapter::Parity parity)
+	{
+		switch (parity) {
+		case serialAdapter::NO_PARITY:
+			dcb.Parity = NOPARITY;
+			break;
+		case serialAdapter::EVEN_PARITY:
+			dcb.Parity = EVENPARITY;
+			break;
+		case serialAdapter::MARK_PARITY:
+			dcb.Parity = MARKPARITY;
+			break;
+		case serialAdapter::ODD_PARITY:
+			dcb.Parity = ODDPARITY;
+			break;
+		case serialAdapter::SPACE_PARITY:
+			dcb.Parity = SPACEPARITY;
+			break;
+		default:
+			dcb.Parity = NOPARITY;
+			break;
+		}
+	}
+	void serialAdapter::syncDataBits(DCB& dcb, serialAdapter::DataBits databit)
+	{
+		switch (databit) {
+		case serialAdapter::DATA_BITS_5:
+			dcb.ByteSize = DATABITS_5;
+			break;
+		case serialAdapter::DATA_BITS_6:
+			dcb.ByteSize = DATABITS_6;
+			break;
+		case serialAdapter::DATA_BITS_7:
+			dcb.ByteSize = DATABITS_7;
+			break;
+		case serialAdapter::DATA_BITS_8:
+			dcb.ByteSize = DATABITS_8;
+			break;
+		default:
+			dcb.ByteSize = DATABITS_8;
+			break;
+		}
+	}
+	void serialAdapter::syncStopBits(DCB& dcb, serialAdapter::StopBits stopbit)
+	{
+		switch (stopbit) {
+		case serialAdapter::STOP_BITS_1:
+			dcb.StopBits = ONESTOPBIT;
+			break;
+		case serialAdapter::STOP_BITS_1_5:
+			dcb.StopBits = ONE5STOPBITS;
+			break;
+		case serialAdapter::STOP_BITS_2:
+			dcb.StopBits = TWOSTOPBITS;
+			break;
+		default:
+			dcb.StopBits = ONESTOPBIT;
+			break;
+		}
+	}
 	RET_CODE serialAdapter::SetupSerialPort(HANDLE file,
 		unsigned long baud,
 		serialAdapter::Parity nParity,
@@ -163,57 +225,9 @@ namespace oym
 			throw std::runtime_error("get commstate error");
 		}
 		ndcb.BaudRate = baud;
-		switch (nParity) {
-		case serialAdapter::NO_PARITY:
-			ndcb.Parity = NOPARITY;
-			break;
-		case serialAdapter::EVEN_PARITY:
-			ndcb.Parity = EVENPARITY;
-			break;
-		case serialAdapter::MARK_PARITY:
-			ndcb.Parity = MARKPARITY;
-			break;
-		case serialAdapter::ODD_PARITY:
-			ndcb.Parity = ODDPARITY;
-			break;
-		case serialAdapter::SPACE_PARITY:
-			ndcb.Parity = SPACEPARITY;
-			break;
-		default:
-			ndcb.Parity = NOPARITY;
-			break;
-		}
-		switch (nDatabits) {
-		case serialAdapter::DATA_BITS_5:
-			ndcb.ByteSize = DATABITS_5;
-			break;
-		case serialAdapter::DATA_BITS_6:
-			ndcb.ByteSize = DATABITS_6;
-			break;
-		case serialAdapter::DATA_BITS_7:
-			ndcb.ByteSize = DATABITS_7;
-			break;
-		case serialAdapter::DATA_BITS_8:
-			ndcb.ByteSize = DATABITS_8;
-			break;
-		default:
-			ndcb.ByteSize = DATABITS_8;
-			break;
-		}
-		switch (nStopbits) {
-		case serialAdapter::STOP_BITS_1:
-			ndcb.StopBits = ONESTOPBIT;
-			break;
-		case serialAdapter::STOP_BITS_1_5:
-			ndcb.StopBits = ONE5STOPBITS;
-			break;
-		case serialAdapter::STOP_BITS_2:
-			ndcb.StopBits = TWOSTOPBITS;
-			break;
-		default:
-			ndcb.StopBits = ONESTOPBIT;
-			break;
-		}
+		syncParity(ndcb, nParity);
+		syncDataBits(ndcb, nDatabits);
+		syncStopBits(ndcb, nStopbits);
 		ndcb.fRtsControl = RTS_CONTROL_DISABLE;
 		ndcb.fDtrControl = DTR_CONTROL_ENABLE;
 		ndcb.fOutxCtsFlow = FALSE;
@@ -229,13 +243,12 @@ namespace oym
 		COMSTAT cs;
 		if (!ClearCommError(file, &dwError, &cs))
 			throw std::runtime_error("ClearCommError failed\n");
-
 		/*set mask*/
 		SetCommMask(file, EV_RXCHAR);
-
 		return SUCCESS;
 	}
-
+#else
+#endif
 	void serialAdapter::readSerialData(void)
 	{
 #ifdef _WIN32

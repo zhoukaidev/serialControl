@@ -142,6 +142,9 @@ namespace oym
 					DataBits nDatabits = DataBits::DATA_BITS_8,
 					StopBits nStopbits = StopBits::STOP_BITS_1,
 					unsigned short readTimeout = 50);
+			void syncParity(DCB& dcb, Parity parity);
+			void syncDataBits(DCB& dcb, DataBits databit);
+			void syncStopBits(DCB& dcb, StopBits stopbit);
 #else
 			RET_CODE SetupSerialPort(unsigned char readTimeout);
 #endif
