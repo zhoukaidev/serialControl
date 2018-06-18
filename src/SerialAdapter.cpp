@@ -320,6 +320,7 @@ namespace oym
 			if (SUCCESS == checkPortAvaliable()) {
 				{
 					quitReadThread();
+					mSerialOpend.store(false);
 					std::lock_guard<std::mutex> ltx(mListenerMtx);
 					for (auto listener : mListener) {
 						auto f = listener.lock();
