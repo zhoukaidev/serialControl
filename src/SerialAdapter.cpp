@@ -15,7 +15,7 @@ namespace oym
 
 	serialAdapter::~serialAdapter()
 	{
-		quitDetectThread();
+		quitReadThread();
 		quitDetectThread();
 	}
 	RET_CODE serialAdapter::registerListener(weak_ptr<SerialListener> ptr)
@@ -82,6 +82,7 @@ namespace oym
 			quitDetectThread();
 			mReadThread = std::thread(std::mem_fn(&serialAdapter::readSerialData),this);
 			mDetectThread = std::thread(std::mem_fn(&serialAdapter::detectSerialAvaliable), this);
+			mSerialOpend.store(true);
 			return SUCCESS;
 		}
 		return FAILURE;
@@ -254,7 +255,7 @@ namespace oym
 #ifdef _WIN32
 		OVERLAPPED osRead;
 		memset(&osRead, 0, sizeof(OVERLAPPED));
-		osRead.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+		//osRead.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 		bool loop = true;
 		while (loop) {
 			DWORD readLen = 0;
@@ -360,8 +361,9 @@ namespace oym
 	}
 	RET_CODE serialAdapter::write_sync(unsigned char data)
 	{
-		if (false == mSerialOpend.load())
+		if (false == mSerialOpend.load()) {
 			return FAILURE;
+		}
 #ifdef _WIN32
 		return writeData(&data, 1);
 #else

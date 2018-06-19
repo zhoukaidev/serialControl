@@ -5,17 +5,15 @@
 #include "SerialAdapter.h"
 #include <iostream>
 
-
-std::condition_variable globalCV;
-
+std::promise<bool> quitPromise;
 class DataCollector : public oym::SerialListener
 {
 public:
 
 	void onClosed()
 	{
+		quitPromise.set_value(true);
 		std::cout << "[INFO]: Serial disconnected\n";
-		globalCV.notify_all();
 	}
 
 	void onData(unsigned char data)
@@ -38,9 +36,12 @@ int main(int argc, char** argv)
 		std::cout << "Open Serial Port failure\n";
 		return 0;
 	}
-		
-	std::mutex mtx;
-	std::unique_lock<std::mutex> ulk(mtx);
-	globalCV.wait(ulk);
+	auto fu = quitPromise.get_future();
+	unsigned char sendData = 0x00;
+	while (std::future_status::timeout ==
+			fu.wait_for(std::chrono::milliseconds(100))){
+		sendData =	(sendData + 1) % 256;
+		adapter.write_sync(sendData);
+	}
 	return 0;
 }
