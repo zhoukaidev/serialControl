@@ -237,7 +237,8 @@ namespace oym
 		ndcb.fInX = FALSE;
 		if (!SetCommState(file, &ndcb)) 
 			throw std::runtime_error("SetCommState failed\n");
-		PurgeComm(file, PURGE_RXCLEAR | PURGE_TXCLEAR);
+		PurgeComm(file, PURGE_RXCLEAR | PURGE_TXCLEAR 
+						| PURGE_RXABORT | PURGE_TXABORT);
 
 		/*clear error*/
 		DWORD dwError;
