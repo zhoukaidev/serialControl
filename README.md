@@ -15,7 +15,7 @@ is named `serialTest` and `serialSDK`.
 2. Build the project `serialTest`, and the executable will be generated in the `bin` directory and the 
 static library in the `lib` directory.
 
-3. Run the executable file of previously built `serialTest`, different messages will be display depends on if the serial device is connected or `com port` is correctly.
+3. Run the executable file of previously built `serialTest`, different messages will be display depends on if the serial device is connected or `com port` is avaliable.
 
 ## Sample code
 
