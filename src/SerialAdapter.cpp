@@ -16,6 +16,7 @@ namespace oym
 	serialAdapter::~serialAdapter()
 	{
 		quitReadThread();
+		quitWriteThread();
 		quitDetectThread();
 	}
 	RET_CODE serialAdapter::registerListener(weak_ptr<SerialListener> ptr)
@@ -46,17 +47,29 @@ namespace oym
 	inline RET_CODE	serialAdapter::quitReadThread(void)
 	{
 		mReadThreadQuit = true;
-		if (mReadThread.joinable())
+		if (mReadThread.joinable()) {
 			mReadThread.join();
+		}
 		mReadThreadQuit = false;
 		return SUCCESS;
 	}
 	inline RET_CODE serialAdapter::quitDetectThread(void)
 	{
 		mDetectThreadQuit = true;
-		if (mDetectThread.joinable())
+		if (mDetectThread.joinable()) {
 			mDetectThread.join();
+		}
 		mDetectThreadQuit = false;
+		return SUCCESS;
+	}
+	inline RET_CODE serialAdapter::quitWriteThread(void)
+	{
+		mWriteThreadQuit = true;
+		if (mWriteThread.joinable()) {
+			mQueue.push(nullptr);
+			mWriteThread.join();
+		}
+		mWriteThreadQuit = false;
 		return SUCCESS;
 	}
 	RET_CODE serialAdapter::open(unsigned int port,
@@ -72,6 +85,7 @@ namespace oym
 		mByteSize = nByteSize;
 		mStopBit = nStopBit;
 		mBaudRate = nBaud;
+		mQueue.clear();
 		if (std::this_thread::get_id() == mReadThread.get_id() ||
 			std::this_thread::get_id() == mDetectThread.get_id()) {
 			return FAILURE; 
@@ -80,8 +94,10 @@ namespace oym
 		if (SUCCESS == ret) {
 			quitReadThread();
 			quitDetectThread();
+			quitWriteThread();
 			mReadThread = std::thread(std::mem_fn(&serialAdapter::readSerialData),this);
 			mDetectThread = std::thread(std::mem_fn(&serialAdapter::detectSerialAvaliable), this);
+			mWriteThread = std::thread(std::mem_fn(&serialAdapter::writeSerialData), this);
 			mSerialOpend.store(true);
 			return SUCCESS;
 		}
@@ -98,6 +114,7 @@ namespace oym
 			return FAILURE;
 		}
 		quitReadThread();
+		quitWriteThread();
 		quitDetectThread();
 		closeSerialPort();
 		mSerialOpend = false;
@@ -256,11 +273,11 @@ namespace oym
 #ifdef _WIN32
 		OVERLAPPED osRead;
 		memset(&osRead, 0, sizeof(OVERLAPPED));
-		//osRead.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+		osRead.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 		bool loop = true;
 		while (loop) {
 			DWORD readLen = 0;
-			 unsigned char data = 0x00;
+			unsigned char data = 0x00;
 			if (mReadThreadQuit.load() == true) {
 				return;
 			}
@@ -322,6 +339,7 @@ namespace oym
 			if (SUCCESS == checkPortAvaliable()) {
 				{
 					quitReadThread();
+					quitWriteThread();
 					mSerialOpend.store(false);
 					std::lock_guard<std::mutex> ltx(mListenerMtx);
 					for (auto listener : mListener) {
@@ -333,8 +351,25 @@ namespace oym
 				}
 				return;
 			}
-#endif
 		}
+#endif
+	}
+	void serialAdapter::writeSerialData(void)
+	{
+#ifdef _WIN32
+		bool loop = true;
+		while (loop) {
+			auto pData = mQueue.wait_and_pop();
+			if (true == mWriteThreadQuit.load()) {
+				mQueue.clear();
+				return;
+			}
+			if (nullptr != pData) {
+				writeData(pData->data(), pData->size());
+			}
+
+		}
+#endif
 	}
 	std::shared_ptr<std::vector<std::string>> serialAdapter::enumSerial(void)
 	{
@@ -346,6 +381,8 @@ namespace oym
 		DWORD writeByte = 0;
 		OVERLAPPED osWrite;
 		memset(&osWrite, 0,sizeof(osWrite));
+		osWrite.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+		std::lock_guard<std::mutex> lock(mWriteMtx);
 		if (!WriteFile(mComFile, ptr, static_cast<WORD>(size), &writeByte, &osWrite)) {
 			if (GetLastError() == ERROR_IO_PENDING) {
 				GetOverlappedResult(mComFile, &osWrite, &writeByte, true);
@@ -381,12 +418,16 @@ namespace oym
 		return FAILURE;
 #endif
 	}
-	std::future<bool> serialAdapter::write_async(unsigned char data)
+	RET_CODE serialAdapter::write_async(unsigned char data)
 	{
-		return std::future<bool>();
+		auto ptr = std::make_shared<std::vector<unsigned char>>(
+					std::initializer_list<unsigned char>{ data });
+		mQueue.push(ptr);
+		return SUCCESS;
 	}
-	std::future<bool> serialAdapter::write_async(std::shared_ptr<std::vector<unsigned char>> data)
+	RET_CODE serialAdapter::write_async(std::shared_ptr<std::vector<unsigned char>> data)
 	{
-		return std::future<bool>();
+		mQueue.push(data);
+		return SUCCESS;
 	}
 }

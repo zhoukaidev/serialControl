@@ -49,7 +49,7 @@ namespace oym
 
 		}
 		void push(T val) {
-			std::lock_guard<std::mutex> lgx(mQueueMx);
+			std::lock_guard<std::mutex> lk(mQueueMx);
 			mdataQueue.push(val);
 			mQueueCv.notify_one();
 		}
@@ -62,8 +62,13 @@ namespace oym
 			return retval;
 		}
 		bool empty() {
-			std::lock_guard(mQueueMx);
+			std::lock_guard<std::mutex> lk(mQueueMx);
 			return mdataQueue.empty();
+		}
+		void clear() {
+			std::lock_guard<std::mutex> lk(mQueueMx);
+			while (!mdataQueue.empty())
+				mdataQueue.pop();
 		}
 	private:
 		std::queue<T> mdataQueue;
@@ -100,9 +105,9 @@ namespace oym
 				StopBits stop) = 0;
 			virtual RET_CODE close() = 0;
 			virtual RET_CODE write_sync(unsigned char data) = 0;
-			virtual std::future<bool> write_async(unsigned char data) = 0;
 			virtual RET_CODE write_sync(std::shared_ptr<std::vector<unsigned char>> data) = 0;
-			virtual std::future<bool> write_async(std::shared_ptr<std::vector<unsigned char>> data) = 0;
+			virtual RET_CODE write_async(unsigned char data) = 0;
+			virtual RET_CODE write_async(std::shared_ptr<std::vector<unsigned char>> data) = 0;
 			virtual RET_CODE registerListener(std::weak_ptr<oym::SerialListener> ptr) = 0;
 			virtual RET_CODE unRegisterListener(std::weak_ptr<oym::SerialListener> ptr) = 0;
 			virtual std::shared_ptr<std::vector<std::string>> enumSerial(void) = 0;
@@ -125,9 +130,9 @@ namespace oym
 
 			virtual RET_CODE close()override;
 			virtual RET_CODE write_sync(unsigned char data) override;
-			virtual std::future<bool> write_async(unsigned char data)override;
 			virtual RET_CODE write_sync(std::shared_ptr<std::vector<unsigned char>> data) override;
-			virtual std::future<bool> write_async(std::shared_ptr<std::vector<unsigned char>> data)  override;
+			virtual RET_CODE write_async(unsigned char data)override;
+			virtual RET_CODE write_async(std::shared_ptr<std::vector<unsigned char>> data)  override;
 			virtual RET_CODE registerListener(std::weak_ptr<oym::SerialListener> ptr) override;
 			virtual RET_CODE unRegisterListener(std::weak_ptr<oym::SerialListener> ptr) override;
 			virtual std::shared_ptr<std::vector<std::string>> enumSerial(void) override;
@@ -150,9 +155,11 @@ namespace oym
 #endif
 			void readSerialData(void);
 			void detectSerialAvaliable(void);
+			void writeSerialData(void);
 			RET_CODE checkPortAvaliable(void);
 			RET_CODE quitDetectThread(void);
 			RET_CODE quitReadThread(void);
+			RET_CODE quitWriteThread(void);
 			RET_CODE writeData(unsigned char* ptr, std::size_t size);
 			std::mutex mListenerMtx;
 			std::set <std::weak_ptr<SerialListener>,std::owner_less<std::weak_ptr<SerialListener>>> mListener;
@@ -161,6 +168,9 @@ namespace oym
 			std::atomic<bool> mReadThreadQuit = false;
 			std::thread mDetectThread;
 			std::atomic<bool> mDetectThreadQuit = false;
+			std::thread mWriteThread;
+			std::atomic<bool> mWriteThreadQuit = false;
+			std::mutex mWriteMtx;
 
 			std::atomic<bool> mSerialOpend;
 
@@ -169,6 +179,8 @@ namespace oym
 			StopBits mStopBit;
 			unsigned int mComPort;
 			unsigned long mBaudRate;
+
+			Thread_safe_Queue<std::shared_ptr<std::vector<unsigned char>>> mQueue;
 #ifdef _WIN32
 			HANDLE mComFile = nullptr;
 #endif
