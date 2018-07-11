@@ -5,12 +5,12 @@
 #include <iostream>
 #include <stdexcept>
 #include <functional>
-
+#include "scl/serial.h"
 using std::mutex;
 using std::weak_ptr;
 using std::set;
 
-namespace oym
+namespace scl
 {
 
 	serialAdapter::~serialAdapter()

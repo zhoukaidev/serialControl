@@ -1,12 +1,12 @@
 // SerialControl.cpp : Defines the entry point for the console application.
 //
 
-#include "SerialListener.h"
-#include "SerialAdapter.h"
 #include <iostream>
 #include <numeric>
 #include <vector>
 #include <optional>
+#include <future>
+#include "scl\serialManager.h"
 
 class DataProtocl{
 public:
@@ -97,7 +97,7 @@ unsigned short payIndex;
 format mProData;
 };
 std::promise<bool> quitPromise;
-class DataCollector : public oym::SerialListener
+class DataCollector : public scl::SerialListener
 {
 public:
 	void onClosed()
@@ -134,15 +134,15 @@ private:
 
 int main(int argc, char** argv)
 {
-	oym::serialAdapter adapter;
+	auto mser = scl::serialManager::createSerial();
 	std::shared_ptr<DataCollector> ptr = std::make_shared<DataCollector>();
-	adapter.registerListener(ptr);
+	mser->registerListener(ptr);
 	unsigned int comport = 0;
 	std::cout << "Please input serial number: ";
 	std::cin >> comport;
 	std::cout << "comport:	"<<	comport << std::endl;
-	auto ret = adapter.open(comport,115200UL);
-	if (ret != oym::SUCCESS) {
+	auto ret = mser->open(comport,115200UL);
+	if (ret != scl::SUCCESS) {
 		std::cout << "Open Serial Port failure\n";
 		return 0;
 	}
